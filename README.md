@@ -12,8 +12,8 @@ WSDM has challenged the Kaggle ML community to help solve these problems and bui
 Winners will present their findings at the conference February 6-8, 2018 in Los Angeles, CA. For more information on the conference, click here, and don't forget to check out the other KKBox/WSDM competition: KKBox Music Churn Prediction Challenge
 
 ## Files description
-- recommender_finctions.py / recommender.py: My own Recommender module, see more <a href='https://github.com/Mdhvince/Recommendation_engine_module'> here </a>
-- rec_music.ipynb: data cleaning + recommendations
+- recommender_functions.py / recommender.py: My own Recommender module, see more <a href='https://github.com/Mdhvince/Recommendation_engine_module'> here </a>
+- recsys.py: data cleaning + recommendations
 
 ## Authors
 Medhy Vinceslas
