@@ -162,6 +162,9 @@ user_item.song_id = user_item.song_id.astype('category').cat.as_known()
 
 
 
+
+
+
 user_item_df = user_item.pivot_table(index='msno',
                                      columns='song_id',
                                      values='interacted',
