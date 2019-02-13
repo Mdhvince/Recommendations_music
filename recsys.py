@@ -105,7 +105,7 @@ client = Client('tcp://192.168.1.10:8786')
 client.restart()
 
 
-client.get_versions(check=True)
+#client.get_versions(check=True)
 
 
 
@@ -133,17 +133,23 @@ for df in pd.read_csv('train.csv', chunksize=100_000, dtype=dtype_interactions):
 df_interactions = dd.from_pandas(df_inter, npartitions=16)
 
 
-##### One thing to know from the doc (http://docs.dask.org/en/latest/dataframe-performance.html)
-##### Often DataFrame workloads look like the following:
+# One thing to know from the doc
+# (http://docs.dask.org/en/latest/dataframe-performance.html)
+# Often DataFrame workloads look like the following:
 
 # - Load data from files
 # - Filter data to a particular subset
 # - Shuffle data to set an intelligent index
 # - Several complex queries on top of this indexed data
 #
-# It is often ideal to load, filter, and shuffle data once and keep this result in memory. Afterwards, each of the several complex queries can be based off of this in-memory data rather than have to repeat the full load-filter-shuffle process each time. To do this, use the client.persist method
-#
-# We import data from S3 (or from pandas) in Xseconds. It will be a great choice to use client.persist method in order to avoid this execution time each time we want to process our data.
+# It is often ideal to load, filter, and shuffle data once and keep this result
+# in memory. Afterwards, each of the several complex queries can be based off of
+# this in-memory data rather than have to repeat the full load-filter-shuffle
+# process each time. To do this, use the client.persist method
+
+# We import data from S3 (or from pandas) in Xseconds. It will be a great choice
+# to use client.persist method in order to avoid this execution time each time
+# we want to process our data.
 
 user_item = df_interactions[['msno', 'song_id', 'interacted']]
 user_item = client.persist(user_item, retries=2)
@@ -154,15 +160,35 @@ user_item = client.persist(user_item, retries=2)
 
 user_item.song_id = user_item.song_id.astype('category').cat.as_known()
 
-#%%time
-#with dask.config.set(fuse_subgraphs=False):
-    #user_item.song_id = user_item.song_id.astype('category').cat.as_known()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 user_item_df = user_item.pivot_table(index='msno',
                                      columns='song_id',
                                      values='interacted',
                                      aggfunc='mean')
+
+
+user_item_df.npartitions
+
+# reset nb partitions to 16
+user_item_df = user_item_df.repartition(npartitions=user_item_df.npartitions*16)
+user_item_df = client.persist(user_item_df, retries=2)
+
 
 #user_item_df = user_item_df.repartition(npartitions=user_item_df.npartitions * 10)
 #user_item_df.npartitions
@@ -177,6 +203,29 @@ dtype_items = {'song_length': np.int32,
                'language': np.float32}
 
 df_items = pd.read_csv('items2.csv', dtype=dtype_items)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 rec = r.Recommender(df_items=df_items,
                     df_reviews=df_interactions,
