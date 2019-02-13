@@ -63,7 +63,6 @@ for i in set_registr_year:
         except ValueError:
             pass
 
-
 # now fill all values that are not in (13, 80) with the mean age based on the year and the method of registration
 def fill_age(df_users):
     for key, val in dict_fill_age.items():
