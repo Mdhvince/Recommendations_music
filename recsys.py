@@ -184,10 +184,12 @@ user_item_df = user_item.pivot_table(index='msno',
                                      aggfunc='mean')
 
 
-user_item_df.npartitions
 
+user_item_df.npartitions
 # reset nb partitions to 16
 user_item_df = user_item_df.repartition(npartitions=user_item_df.npartitions*16)
+user_item_df.npartitions
+
 user_item_df = client.persist(user_item_df, retries=2)
 
 
