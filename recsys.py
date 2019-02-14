@@ -172,13 +172,9 @@ user_item
 user_item = client.persist(user_item, retries=2)
 
 # suggestion to convert to cat by Rocklin
-#user_item.categorize(columns=['interacted'])
-#this act like a while true loop and got errors on workers
-
-user_item.song_id = user_item.song_id.astype('category').cat.as_known()
-
-
-
+user_item = user_item.categorize(columns=['song_id'])
+user_item = client.persist(user_item, retries=2)
+user_item
 
 
 
