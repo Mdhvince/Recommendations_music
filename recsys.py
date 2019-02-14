@@ -29,7 +29,6 @@ import dask
 import dask.dataframe as dd
 from dask.distributed import Client, progress
 
-
 def user_analysis():
     dtype_users = {'city': np.int32,
                    'bd': np.int32,
@@ -113,41 +112,39 @@ df_users.head()
 for df in pd.read_csv('items2.csv', chunksize=100_000):
     display(df.head(3))
     break
+
 ###########
 ###########
 ###########
 
 client = Client('tcp://192.168.1.10:8786')
 client.restart()
-
-
 #client.get_versions(check=True)
 
+def read_fromS3(file_path):
+    aws_ids = pd.read_csv('aws_ids.csv', header=1)
+    AWSAccessKeyId = aws_ids.AWSAccessKeyId[0]
+    AWSSecretKey = aws_ids.AWSSecretKey[0]
 
+    df_interactions = dd.read_csv(file_path,
+                                  storage_options= {'key': AWSAccessKeyId,
+                                                    'secret': AWSSecretKey})
+    return df_interactions
+#df_interactions = read_fromS3('s3://stock-mdh-datascience/train.csv')
 
-#%%time
-# File loaded to S3 bucket
-# read aws_ids
+def construct_pandas_df():
+    dtype_interactions = {'date': np.int16,
+                          'interacted': np.int16}
 
-#aws_ids = pd.read_csv('aws_ids.csv', header=1)
-#AWSAccessKeyId = aws_ids.AWSAccessKeyId[0]
-#AWSSecretKey = aws_ids.AWSSecretKey[0]
+    df_inter = pd.DataFrame()
+    for df in pd.read_csv('train.csv', chunksize=100_000, dtype=dtype_interactions):
+        df_inter = df_inter.append(df)
 
-#df_interactions = dd.read_csv('s3://stock-mdh-datascience/train.csv',
-                              #storage_options= {'key': AWSAccessKeyId,
-                                                #'secret': AWSSecretKey})
-
-dtype_interactions = {'date': np.int16,
-                      'interacted': np.int16}
-
-df_inter = pd.DataFrame()
-for df in pd.read_csv('train.csv', chunksize=100_000, dtype=dtype_interactions):
-    df_inter = df_inter.append(df)
-
+    return df_inter
+df_inter = construct_pandas_df()
 
 %%time
 df_interactions = dd.from_pandas(df_inter, npartitions=16)
-
 
 # One thing to know from the doc
 # (http://docs.dask.org/en/latest/dataframe-performance.html)
@@ -168,6 +165,10 @@ df_interactions = dd.from_pandas(df_inter, npartitions=16)
 # we want to process our data.
 
 user_item = df_interactions[['msno', 'song_id', 'interacted']]
+user_item
+
+# persist data across the cluster (computation done in the background, see
+# diagnostic)
 user_item = client.persist(user_item, retries=2)
 
 # suggestion to convert to cat by Rocklin
