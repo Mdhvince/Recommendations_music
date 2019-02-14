@@ -29,73 +29,90 @@ import dask
 import dask.dataframe as dd
 from dask.distributed import Client, progress
 
-dtype_users = {'city': np.int32,
-               'bd': np.int32,
-               'registered_via': np.int32,
-               'registration_init_time': np.int32,
-               'expiration_date': np.int32}
 
-df_users = pd.read_csv('members.csv', dtype=dtype_users)
+def user_analysis():
+    dtype_users = {'city': np.int32,
+                   'bd': np.int32,
+                   'registered_via': np.int32,
+                   'registration_init_time': np.int32,
+                   'expiration_date': np.int32}
 
-# parse date calumns
-for i in ['registration_init_time', 'expiration_date']:
-    df_users[i] = pd.to_datetime(df_users[i], format='%Y%m%d', errors='ignore')
+    df_users = pd.read_csv('members.csv', dtype=dtype_users)
 
-df_users['registration_year'] = pd.DatetimeIndex(df_users['registration_init_time']).year
+    # parse date calumns
+    for i in ['registration_init_time', 'expiration_date']:
+        df_users[i] = pd.to_datetime(df_users[i], format='%Y%m%d',
+                                     errors='ignore')
 
-# find all mean age
-warnings.filterwarnings('ignore')
+    df_users['registration_year'] = (
+        pd.DatetimeIndex(df_users['registration_init_time']).year
+    )
 
-set_registr_year = set(df_users.registration_year.values)
-set_registr_via = set(df_users.registered_via.values)
 
-dict_fill_age = {}
-for i in set_registr_year:
-    for j in set_registr_via:
-        try:
-            dict_fill_age[tuple([i, j])] = (
-                int(
-                    df_users[(df_users.bd >= 13)
-                             & (df_users.bd <= 80)][(df_users.registration_year == i)
-                                                                        & (df_users.registered_via == j)].bd.mean()
+    # find all mean age
+    warnings.filterwarnings('ignore')
+
+    set_registr_year = set(df_users.registration_year.values)
+    set_registr_via = set(df_users.registered_via.values)
+
+    dict_fill_age = {}
+    for i in set_registr_year:
+        for j in set_registr_via:
+            try:
+                dict_fill_age[tuple([i, j])] = (
+                    int(
+                        df_users[(df_users.bd >= 13)
+                        & (df_users.bd <= 80)][(df_users.registration_year == i)
+                        & (df_users.registered_via == j)].bd.mean()
+                    )
                 )
-            )
-        except ValueError:
-            pass
+            except ValueError:
+                pass
 
-# now fill all values that are not in (13, 80) with the mean age based on the year and the method of registration
-def fill_age(df_users):
-    for key, val in dict_fill_age.items():
-        c = np.logical_and(
-                np.logical_and(
-                    df_users.registration_year == key[0], df_users.registered_via == key[1]
-                ),
-                np.logical_or(df_users.bd < 13, df_users.bd > 80)
-            )
+    # now fill all values that are not in (13, 80) with the mean age based
+    # on the year and the method of registration
+    def fill_age(df_users):
+        for key, val in dict_fill_age.items():
+            c = np.logical_and(
+                    np.logical_and(
+                        df_users.registration_year == key[0],
+                        df_users.registered_via == key[1]
+                    ),
+                    np.logical_or(df_users.bd < 13, df_users.bd > 80)
+                )
 
-        if c:
-            return val
-        elif np.logical_and(df_users.bd >= 13, df_users.bd <= 80):
-            return df_users.bd
-        else:
-            pass
+            if c:
+                return val
+            elif np.logical_and(df_users.bd >= 13, df_users.bd <= 80):
+                return df_users.bd
+            else:
+                pass
 
-df_users.bd = df_users.apply(fill_age, axis=1)
+    df_users.bd = df_users.apply(fill_age, axis=1)
 
-x = df_users[['bd', 'registration_year', 'registered_via']]
+    x = df_users[['bd', 'registration_year', 'registered_via']]
 
-# I'll fill missing age with the overall mean
-df_users.bd.fillna(df_users.bd.mean(), inplace=True)
-df_users.bd = df_users.bd.astype('int32')
+    # I'll fill missing age with the overall mean
+    df_users.bd.fillna(df_users.bd.mean(), inplace=True)
+    df_users.bd = df_users.bd.astype('int32')
 
-del x
+    del x
 
-df_users.drop(labels=['gender', 'registration_init_time',
-                      'expiration_date', 'registration_year'], axis=1, inplace=True)
+    df_users.drop(labels=['gender',
+                          'registration_init_time',
+                          'expiration_date',
+                          'registration_year'], axis=1, inplace=True)
+
+    return df_users
 
 
-
+df_users = user_analysis()
 df_users.head()
+
+
+for df in pd.read_csv('items2.csv', chunksize=100_000):
+    display(df.head(3))
+    break
 ###########
 ###########
 ###########
