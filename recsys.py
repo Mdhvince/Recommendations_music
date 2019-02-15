@@ -2,20 +2,14 @@ import sys
 import pandas as pd
 import numpy as np
 from sklearn.externals import joblib
-import recommender as r
-
-# Nlp
+#import recommender as r
+import recommender1by1 as robo
 import re
 import nltk
 from nltk.corpus import stopwords
-#nltk.download('punkt')
-#nltk.download('stopwords')
-#nltk.download('wordnet')
 from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.stem.wordnet import WordNetLemmatizer
-#import spacy
-#nlp = spacy.load('en_core_web_sm')
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -117,7 +111,8 @@ for df in pd.read_csv('items2.csv', chunksize=100_000):
 ###########
 ###########
 
-client = Client('tcp://192.168.1.10:8786')
+SCHEDULER = 'tcp://192.168.1.10:8786'
+client = Client(SCHEDULER)
 client.restart()
 #client.get_versions(check=True)
 
@@ -143,7 +138,6 @@ def construct_pandas_df():
     return df_inter
 df_inter = construct_pandas_df()
 
-%%time
 df_interactions = dd.from_pandas(df_inter, npartitions=16)
 
 # One thing to know from the doc
@@ -165,40 +159,16 @@ df_interactions = dd.from_pandas(df_inter, npartitions=16)
 # we want to process our data.
 
 user_item = df_interactions[['msno', 'song_id', 'interacted']]
-user_item
-
-# persist data across the cluster (computation done in the background, see
-# diagnostic)
 user_item = client.persist(user_item, retries=2)
+#user_item = user_item.categorize(columns=['song_id'])
+#user_item = client.persist(user_item, retries=2)
+user_item_grouped = user_item.groupby(['msno',
+                                       'song_id'])['interacted'].max()
 
-# suggestion to convert to cat by Rocklin
-user_item = user_item.categorize(columns=['song_id'])
-user_item = client.persist(user_item, retries=2)
-user_item
-
-
-
-user_item_df = user_item.pivot_table(index='msno',
-                                     columns='song_id',
-                                     values='interacted',
-                                     aggfunc='mean')
+user_item_grouped_pd = client.compute(user_item_grouped).result()
+type(user_item_grouped_pd)
 
 
-
-user_item_df.npartitions
-# reset nb partitions to 16
-user_item_df = user_item_df.repartition(npartitions=user_item_df.npartitions*16)
-user_item_df.npartitions
-
-user_item_df = client.persist(user_item_df, retries=2)
-
-
-#user_item_df = user_item_df.repartition(npartitions=user_item_df.npartitions * 10)
-#user_item_df.npartitions
-
-%%time
-#with dask.config.set(shuffle='tasks'):
-    #user_item_df.head()
 
 
 # read all the data (already done for df interactions)
@@ -207,102 +177,35 @@ dtype_items = {'song_length': np.int32,
 
 df_items = pd.read_csv('items2.csv', dtype=dtype_items)
 
+df_inter['date'] = 0
 
 
 
 
 
+#MAKE RECOMMENDATIONS
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-rec = r.Recommender(df_items=df_items,
-                    df_reviews=df_interactions,
-                    user_item_df=user_item_df,
+rec = robo.Recommender(df_items=df_items,
+                    df_reviews=df_inter,
+                    user_item_grouped=user_item_grouped_pd,
                     item_name_colname='name',
                     user_id_colname='msno',
                     item_id_colname='song_id',
                     rating_col_name='interacted',
                     date_col_name='date')
 
-rec.fit(iters=5)
-
-df_user_similarity = user_item_df.reset_index().replace(np.nan, 0)
-def prep_get_similar_user():
-    user_content = np.array(df_user_similarity.iloc[:,1:])
-    user_content_transpose = np.transpose(user_content)
-    dot_prod = user_content.dot(user_content_transpose)
-    return dot_prod
-
-dot_product_matrix_user = prep_get_similar_user()
-
-temp_df_item_similarity = df_items.iloc[:,3:]
-
-from sklearn.preprocessing import MinMaxScaler
-
-mms = MinMaxScaler()
-
-item_content = mms.fit_transform(temp_df_item_similarity)
-
-del temp_df_item_similarity
-
-# Maybe use dask here to go faster (will try later)
-
-def prep_get_similar_item():
-    item_content_transpose = np.transpose(item_content)
-    dot_prod = item_content.dot(item_content_transpose)
-    return dot_prod
-
-dot_product_matrix_item = prep_get_similar_item()
-
-def display_recommendations(rec_ids, rec_names, message, rec_ids_users, rec_user_articles):
-
-    if type(rec_ids) == type(None):
-        print(f"{message}")
-
-    else:
-        dict_id_name = dict(zip(rec_ids, rec_names))
-
-        if type(rec_ids_users) != type(None):
-            print('Matrix Factorisation SVD:')
-            print(f"\t{message}")
-
-            for key, val  in dict_id_name.items():
-                print(f"\t- ID items: {key}")
-                print(f"\tName: {val}\n")
-
-            print('CF User Based:')
-            print('\tUser that are similar to you also enjoy:\n')
-            for i in rec_user_articles[:5]:
-                print(f"\t- {i}")
-        else:
-            print(f"\t{message}")
-            dict_id_name = dict(zip(rec_ids, rec_names))
-            for key, val  in dict_id_name.items():
-                print(f"\t- ID items: {key}")
-                print(f"\tName: {val}\n")
 
 
-list_existing_user_ids = rec.user_ids_series
-list_existing_item_ids = rec.items_ids_series
+list_existing_user_ids = rec.user_item_grouped.reset_index()[rec.user_id_colname].unique()
+list_existing_user_ids[0]
 
-rec_ids, rec_names, message, rec_ids_users, rec_user_articles = rec.make_recommendations(_id=3,
-                                                                                         dot_prod_user= dot_product_matrix_user,
-                                                                                         dot_prod_item=dot_product_matrix_item,
-                                                                                         _id_type='user',
-                                                                                         rec_num=5)
-display_recommendations(rec_ids, rec_names, message, rec_ids_users, rec_user_articles)
+
+
+rec_ids, rec_names, message = rec.make_recommendations(_id=list_existing_user_ids[0], _id_type='user',rec_num=5)
+
+message
+rec_ids
+rec_names
