@@ -2,26 +2,13 @@ import sys
 import pandas as pd
 import numpy as np
 from sklearn.externals import joblib
-#import recommender as r
 import recommender1by1 as robo
-import re
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from sklearn.feature_extraction.text import TfidfVectorizer
-from nltk.stem.wordnet import WordNetLemmatizer
-
 import warnings
 warnings.filterwarnings('ignore')
-
-# Viz
-import matplotlib.pyplot as plt
-import seaborn as sns
-%matplotlib inline
-
 import dask
 import dask.dataframe as dd
 from dask.distributed import Client, progress
+
 
 def user_analysis():
     dtype_users = {'city': np.int32,
@@ -97,8 +84,6 @@ def user_analysis():
                           'registration_year'], axis=1, inplace=True)
 
     return df_users
-
-
 df_users = user_analysis()
 df_users.head()
 
@@ -125,7 +110,6 @@ def read_fromS3(file_path):
                                   storage_options= {'key': AWSAccessKeyId,
                                                     'secret': AWSSecretKey})
     return df_interactions
-#df_interactions = read_fromS3('s3://stock-mdh-datascience/train.csv')
 
 def construct_pandas_df():
     dtype_interactions = {'date': np.int16,
@@ -137,7 +121,6 @@ def construct_pandas_df():
 
     return df_inter
 df_inter = construct_pandas_df()
-
 df_interactions = dd.from_pandas(df_inter, npartitions=16)
 
 # One thing to know from the doc
@@ -160,8 +143,6 @@ df_interactions = dd.from_pandas(df_inter, npartitions=16)
 
 user_item = df_interactions[['msno', 'song_id', 'interacted']]
 user_item = client.persist(user_item, retries=2)
-#user_item = user_item.categorize(columns=['song_id'])
-#user_item = client.persist(user_item, retries=2)
 user_item_grouped = user_item.groupby(['msno',
                                        'song_id'])['interacted'].max()
 
@@ -169,33 +150,19 @@ user_item_grouped_pd = client.compute(user_item_grouped).result()
 type(user_item_grouped_pd)
 
 
-
-
-# read all the data (already done for df interactions)
 dtype_items = {'song_length': np.int32,
                'language': np.float32}
 
 df_items = pd.read_csv('items2.csv', dtype=dtype_items)
-
 df_inter['date'] = 0
 
 
-
-
-
 #MAKE RECOMMENDATIONS
-
-
-
-
-rec = robo.Recommender(df_items=df_items,
-                    df_reviews=df_inter,
-                    user_item_grouped=user_item_grouped_pd,
-                    item_name_colname='name',
-                    user_id_colname='msno',
-                    item_id_colname='song_id',
-                    rating_col_name='interacted',
-                    date_col_name='date')
+rec = robo.Recommender(df_items=df_items, df_reviews=df_inter,
+                      user_item_grouped=user_item_grouped_pd,
+                      item_name_colname='name', user_id_colname='msno',
+                      item_id_colname='song_id', rating_col_name='interacted',
+                      date_col_name='date')
 
 
 
